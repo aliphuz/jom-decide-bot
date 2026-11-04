@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#10110f">
+    <meta name="api-base-url" content="">
+    <title>Jom Decide</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              ink: "var(--app-bg, #10110f)",
+              panel: "var(--app-panel, #191a17)",
+              lime: "var(--app-accent, #d7f36a)",
+              muted: "var(--app-hint, #a4a69e)"
+            },
+            fontFamily: {
+              sans: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"]
+            }
+          }
+        }
+      };
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+      :root {
+        color-scheme: light dark;
+        --app-bg: #10110f;
+        --app-panel: #191a17;
+        --app-text: #ffffff;
+        --app-hint: #a4a69e;
+        --app-accent: #d7f36a;
+        --app-button-text: #10110f;
+      }
+      body { font-family: "DM Sans", sans-serif; }
+      body { background-color: var(--app-bg); color: var(--app-text); }
+      input, select, textarea { color: var(--app-text); }
+      .text-ink { color: var(--app-button-text); }
+      .safe-bottom { padding-bottom: max(1.25rem, env(safe-area-inset-bottom)); }
+      .coin { transform-style: preserve-3d; }
+      .coin.is-flipping { animation: flip .9s cubic-bezier(.15,.7,.25,1); }
+      @keyframes flip { 0% { transform: rotateY(0); } 75% { transform: rotateY(1260deg); } 100% { transform: rotateY(1440deg); } }
+      .tab-button[aria-selected="true"] { background: var(--app-accent); color: var(--app-button-text); }
+      button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--app-accent); outline-offset: 3px; }
+    </style>
+  </head>
+  <body class="min-h-screen bg-ink antialiased">
+    <main class="mx-auto min-h-screen w-full max-w-xl px-5 pt-6 safe-bottom">
+      <header class="mb-7 flex items-center justify-between">
+        <div>
+          <p class="text-xs font-bold uppercase tracking-[.22em] text-lime">Jom Decide</p>
+          <h1 class="mt-1 text-2xl font-extrabold tracking-tight">Less thinking.<br>More doing.</h1>
+        </div>
+        <div class="grid h-12 w-12 place-items-center rounded-2xl bg-lime text-2xl text-ink" aria-hidden="true">✦</div>
+      </header>
+
+      <nav class="mb-6 grid grid-cols-3 gap-2 rounded-2xl bg-panel p-1.5" aria-label="Decider tools" role="tablist">
+        <button class="tab-button rounded-xl px-2 py-3 text-sm font-bold transition" id="tab-food" role="tab" aria-selected="true" aria-controls="panel-food">🍔 Makan / Hangout</button>
+        <button class="tab-button rounded-xl px-2 py-3 text-sm font-bold text-muted transition" id="tab-decide" role="tab" aria-selected="false" aria-controls="panel-decide">🪙 Quick decide</button>
+        <button class="tab-button rounded-xl px-2 py-3 text-sm font-bold text-muted transition" id="tab-trip" role="tab" aria-selected="false" aria-controls="panel-trip">🗺️ Trip builder</button>
+      </nav>
+
+      <section id="panel-food" role="tabpanel" aria-labelledby="tab-food">
+        <div class="mb-5">
+          <h2 class="text-xl font-extrabold">Jom Makan / Hangout</h2>
+          <p class="mt-1 text-sm text-muted">One random pick from nearby OpenStreetMap places.</p>
+        </div>
+        <form id="food-form" class="space-y-4">
+          <label class="block text-sm font-semibold" for="location">Your area in Malaysia</label>
+          <div class="flex gap-2">
+            <input id="location" name="location" class="min-w-0 flex-1 rounded-xl border border-white/10 bg-panel px-4 py-3 text-base placeholder:text-muted/70" placeholder="Damansara, Penang, Subang Jaya" maxlength="120">
+            <button id="share-location" class="shrink-0 rounded-xl border border-white/10 bg-panel px-3 text-sm font-bold" type="button" aria-label="Use my current location">Use GPS</button>
+          </div>
+          <label class="block text-sm font-semibold">What are you feeling?
+            <select id="place-type" class="mt-2 w-full rounded-xl border border-white/10 bg-panel px-3 py-3">
+              <option value="food">Food — restaurants, mamak, cafes</option>
+              <option value="hangout">Hangout — parks, arcades, malls</option>
+            </select>
+          </label>
+          <p class="text-xs leading-relaxed text-muted">Search radius: 3 km. Place data from OpenStreetMap contributors.</p>
+          <button class="w-full rounded-xl bg-lime px-4 py-4 font-extrabold text-ink transition active:scale-[.99]" type="submit">Decide For Me!</button>
+        </form>
+        <p id="food-status" class="mt-4 min-h-5 text-sm text-muted" role="status" aria-live="polite"></p>
+        <article id="place-result" class="mt-3 hidden rounded-2xl border border-white/10 bg-panel p-5" aria-live="polite"></article>
+      </section>
+
+      <section id="panel-decide" class="hidden" role="tabpanel" aria-labelledby="tab-decide">
+        <div class="mb-5">
+          <h2 class="text-xl font-extrabold">Make the call</h2>
+          <p class="mt-1 text-sm text-muted">Flip a coin or let fate pick your winner.</p>
+        </div>
+        <div class="rounded-2xl bg-panel p-5 text-center">
+          <p class="text-sm font-bold text-muted">COIN TOSS</p>
+          <div id="coin" class="coin mx-auto my-6 grid h-36 w-36 place-items-center rounded-full border-4 border-lime bg-lime text-2xl font-extrabold text-ink shadow-[0_0_50px_rgba(215,243,106,.16)]" aria-live="polite">Ready?</div>
+          <div class="mb-4 grid grid-cols-2 gap-2 text-left">
+            <label class="text-xs font-semibold text-muted">Side A
+              <input id="coin-head" class="mt-1 w-full rounded-lg border border-white/10 bg-ink px-3 py-2 text-sm text-white" value="Ya" maxlength="24">
+            </label>
+            <label class="text-xs font-semibold text-muted">Side B
+              <input id="coin-tail" class="mt-1 w-full rounded-lg border border-white/10 bg-ink px-3 py-2 text-sm text-white" value="Tidak" maxlength="24">
+            </label>
+          </div>
+          <button id="flip-coin" class="w-full rounded-xl bg-white px-4 py-3 font-extrabold text-ink">Flip coin</button>
+        </div>
+        <div class="mt-4 rounded-2xl bg-panel p-5">
+          <h3 class="font-extrabold">Custom picker</h3>
+          <p class="mt-1 text-sm text-muted">Add 2 to 10 choices, one per line.</p>
+          <textarea id="choices" rows="5" maxlength="500" class="mt-4 w-full resize-y rounded-xl border border-white/10 bg-ink px-4 py-3 text-sm placeholder:text-muted/60" placeholder="Nasi lemak&#10;Char kuey teow&#10;Chicken rice"></textarea>
+          <div id="wheel-wrap" class="relative mx-auto mt-4 hidden w-fit">
+            <span class="absolute left-1/2 top-0 z-10 -translate-x-1/2 border-x-[10px] border-t-[18px] border-x-transparent border-t-white" aria-hidden="true"></span>
+            <canvas id="wheel" class="block max-w-full" width="300" height="300" aria-label="Random choice wheel"></canvas>
+          </div>
+          <p id="choice-result" class="mt-3 min-h-6 text-center font-extrabold text-lime" aria-live="polite"></p>
+          <p id="choice-status" class="mb-3 min-h-5 text-center text-sm text-muted" role="status" aria-live="polite"></p>
+          <button id="spin-wheel" class="w-full rounded-xl bg-lime px-4 py-3 font-extrabold text-ink">Pick a winner</button>
+        </div>
+      </section>
+
+      <section id="panel-trip" class="hidden" role="tabpanel" aria-labelledby="tab-trip">
+        <div class="mb-5">
+          <h2 class="text-xl font-extrabold">Plan something</h2>
+          <p class="mt-1 text-sm text-muted">Pick a destination or shuffle a day out.</p>
+        </div>
+        <div class="rounded-2xl bg-panel p-5">
+          <h3 class="font-extrabold">Where should we go?</h3>
+          <p class="mt-1 text-sm text-muted">Enter 2 to 10 destinations, one per line.</p>
+          <textarea id="destinations" rows="4" maxlength="500" class="mt-4 w-full resize-y rounded-xl border border-white/10 bg-ink px-4 py-3 text-sm placeholder:text-muted/60" placeholder="Penang&#10;Ipoh&#10;Melaka"></textarea>
+          <button id="pick-destination" class="mt-3 w-full rounded-xl bg-lime px-4 py-3 font-extrabold text-ink">Pick destination</button>
+          <p id="destination-result" class="mt-3 min-h-6 text-center font-extrabold text-lime" aria-live="polite"></p>
+        </div>
+        <div class="mt-4 rounded-2xl bg-panel p-5">
+          <h3 class="font-extrabold">Build a one-day plan</h3>
+          <p class="mt-1 text-sm text-muted">Add 2 to 10 activities. We’ll shuffle them into time slots.</p>
+          <textarea id="activities" rows="5" maxlength="500" class="mt-4 w-full resize-y rounded-xl border border-white/10 bg-ink px-4 py-3 text-sm placeholder:text-muted/60" placeholder="Breakfast&#10;Visit a museum&#10;Explore a night market"></textarea>
+          <button id="build-itinerary" class="mt-3 w-full rounded-xl border border-lime/50 px-4 py-3 font-extrabold text-lime">Shuffle my day</button>
+          <ol id="itinerary-result" class="mt-4 space-y-3" aria-live="polite"></ol>
+          <p id="trip-status" class="mt-2 min-h-5 text-center text-sm text-muted" role="status" aria-live="polite"></p>
+        </div>
+      </section>
+      <footer class="mt-8 border-t border-white/10 pt-4 text-center text-xs text-muted">Made for Malaysian indecision. Place data © <a class="underline" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a>.</footer>
+    </main>
+    <script src="./app.js" defer></script>
+  </body>
+</html>
