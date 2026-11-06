@@ -62,6 +62,68 @@
   const foodStatus = document.querySelector("#food-status");
   const placeResult = document.querySelector("#place-result");
   let sharedCoordinates = null;
+  let decisionSession = null;
+
+  async function requestJson(path, options = {}) {
+    const response = await fetch(`${apiBase}${path}`, {
+      ...options,
+      headers: { "Content-Type": "application/json", ...(options.headers || {}) }
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Request failed.");
+    return data;
+  }
+
+  function searchPayload(type = "food", locationField = "#location") {
+    return {
+      location: document.querySelector(locationField).value.trim(),
+      coordinates: locationField === "#location" ? sharedCoordinates : null,
+      type,
+      budget: document.querySelector("#budget-filter").value,
+      craving: document.querySelector("#craving-filter").value,
+      dietary: document.querySelector("#dietary-filter").value
+    };
+  }
+
+  function saveDecisionSession() {
+    if (decisionSession) sessionStorage.setItem("jom-decide-pick", JSON.stringify(decisionSession));
+  }
+
+  function appendPlaceDetails(container, place, compact = false) {
+    const title = document.createElement("h3");
+    title.className = compact ? "font-extrabold" : "text-xl font-extrabold";
+    title.textContent = place.name;
+    container.append(title);
+
+    const category = document.createElement("p");
+    category.className = "mt-1 text-sm font-bold text-lime";
+    category.textContent = place.category;
+    container.append(category);
+
+    const details = document.createElement("p");
+    details.className = "mt-2 text-sm text-muted";
+    const distance = Number.isFinite(place.distanceKm) ? `${place.distanceKm} km away` : place.area;
+    const dietary = place.halal ? " · Halal tagged" : place.porkFree ? " · Pork-free tagged" : "";
+    details.textContent = `${distance} · Est. RM${place.budgetEstimate}/person · ${place.openStatus}${dietary}`;
+    container.append(details);
+
+    const navigation = document.createElement("div");
+    navigation.className = "mt-4 flex flex-wrap gap-2";
+    [
+      { url: place.wazeUrl, label: "🚗 Open in Waze", style: "border border-white/15" },
+      { url: place.googleMapsUrl, label: "🗺️ Open in Google Maps", style: "bg-white text-ink" }
+    ].forEach(({ url, label, style }) => {
+      if (!url) return;
+      const link = document.createElement("a");
+      link.className = `inline-flex rounded-xl px-3 py-2 text-sm font-extrabold ${style}`;
+      link.href = url;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.textContent = label;
+      navigation.append(link);
+    });
+    container.append(navigation);
+  }
 
   document.querySelector("#share-location").addEventListener("click", () => {
     if (!navigator.geolocation) {
@@ -99,26 +161,21 @@
     }
 
     placeResult.classList.add("hidden");
+    decisionSession = null;
+    sessionStorage.removeItem("jom-decide-pick");
     foodStatus.textContent = "Finding nearby places…";
     const submitButton = foodForm.querySelector('[type="submit"]');
     submitButton.disabled = true;
 
     try {
-      const response = await fetch(`${apiBase}/api/decide`, {
+      const data = await requestJson("/api/places", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          location,
-          coordinates: sharedCoordinates,
-          type: document.querySelector("#place-type").value
-        })
+        body: JSON.stringify(searchPayload(document.querySelector("#place-type").value))
       });
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || "Could not find a place.");
-      }
-
-      renderPlace(data.place);
+      const first = randomItem(data.places);
+      decisionSession = { places: data.places, first, current: first, rerolls: 0 };
+      saveDecisionSession();
+      renderPlace(decisionSession.first);
       foodStatus.textContent = "Decision made. Enjoy!";
     } catch (error) {
       foodStatus.textContent = error.message || "Could not reach the server. Check your connection.";
@@ -129,46 +186,291 @@
 
   function renderPlace(place) {
     placeResult.replaceChildren();
+    appendPlaceDetails(placeResult, place);
 
-    const title = document.createElement("h3");
-    title.className = "text-xl font-extrabold";
-    title.textContent = place.name;
-    placeResult.append(title);
-
-    const category = document.createElement("p");
-    category.className = "mt-2 text-sm font-bold text-lime";
-    category.textContent = place.category;
-    placeResult.append(category);
-
-    const area = document.createElement("p");
-    area.className = "mt-2 text-sm text-muted";
-    area.textContent = place.area;
-    placeResult.append(area);
-
-    const navigation = document.createElement("div");
-    navigation.className = "mt-5 flex flex-wrap gap-2";
-    if (place.googleMapsUrl) {
-      const link = document.createElement("a");
-      link.className = "inline-flex rounded-xl bg-white px-4 py-3 text-sm font-extrabold text-ink";
-      link.href = place.googleMapsUrl;
-      link.target = "_blank";
-      link.rel = "noopener noreferrer";
-      link.textContent = "Navigate with Google Maps";
-      navigation.append(link);
+    if (decisionSession && decisionSession.places.length > 1) {
+      const rejectButton = document.createElement("button");
+      rejectButton.className = "mt-4 w-full rounded-xl border border-lime/50 px-4 py-3 font-extrabold text-lime";
+      rejectButton.type = "button";
+      rejectButton.textContent = decisionSession.rerolls === 0 ? "Not this one? Re-roll once" : "Reject again — lock first pick";
+      rejectButton.addEventListener("click", () => {
+        if (decisionSession.rerolls === 0) {
+          decisionSession.rerolls = 1;
+          const alternatives = decisionSession.places.filter((candidate) => candidate.id !== decisionSession.first.id);
+          decisionSession.current = randomItem(alternatives);
+          saveDecisionSession();
+          renderPlace(decisionSession.current);
+          foodStatus.textContent = "Last re-roll used. Reject again to lock the first pick.";
+          return;
+        }
+        decisionSession.rerolls = 2;
+        decisionSession.current = decisionSession.first;
+        saveDecisionSession();
+        renderPlace(decisionSession.first);
+        foodStatus.textContent = "Locked to your first pick.";
+      });
+      if (decisionSession.rerolls > 1) {
+        rejectButton.disabled = true;
+        rejectButton.textContent = "First pick locked";
+      }
+      placeResult.append(rejectButton);
     }
-    if (place.wazeUrl) {
-      const link = document.createElement("a");
-      link.className = "inline-flex rounded-xl border border-white/15 px-4 py-3 text-sm font-extrabold";
-      link.href = place.wazeUrl;
-      link.target = "_blank";
-      link.rel = "noopener noreferrer";
-      link.textContent = "Waze";
-      navigation.append(link);
-    }
-    placeResult.append(navigation);
-
     placeResult.classList.remove("hidden");
   }
+
+  const savedDecision = sessionStorage.getItem("jom-decide-pick");
+  if (savedDecision) {
+    try {
+      const restored = JSON.parse(savedDecision);
+      if (Array.isArray(restored.places) && restored.first && restored.current
+        && Number.isInteger(restored.rerolls) && restored.rerolls >= 0 && restored.rerolls <= 2) {
+        decisionSession = restored;
+        renderPlace(decisionSession.current);
+        foodStatus.textContent = "Your current pick session is restored.";
+      } else {
+        throw new Error("Saved pick session has an invalid shape.");
+      }
+    } catch (error) {
+      sessionStorage.removeItem("jom-decide-pick");
+      foodStatus.textContent = error.message;
+    }
+  }
+
+  let tournamentRound = [];
+  let tournamentWinners = [];
+  let tournamentMatchIndex = 0;
+  let tournamentRoundNumber = 1;
+
+  function renderTournamentMatch() {
+    const target = document.querySelector("#tournament-match");
+    target.replaceChildren();
+    if (tournamentMatchIndex >= tournamentRound.length / 2) {
+      if (tournamentWinners.length === 1) {
+        const champion = document.createElement("article");
+        champion.className = "rounded-2xl border border-lime/50 bg-panel p-5";
+        const heading = document.createElement("p");
+        heading.className = "mb-3 text-sm font-extrabold uppercase text-lime";
+        heading.textContent = "🏆 Tournament champion";
+        champion.append(heading);
+        appendPlaceDetails(champion, tournamentWinners[0]);
+        target.append(champion);
+        document.querySelector("#tournament-status").textContent = "Champion chosen.";
+        return;
+      }
+      tournamentRound = tournamentWinners;
+      tournamentWinners = [];
+      tournamentMatchIndex = 0;
+      tournamentRoundNumber += 1;
+    }
+
+    const first = tournamentRound[tournamentMatchIndex * 2];
+    const second = tournamentRound[tournamentMatchIndex * 2 + 1];
+    document.querySelector("#tournament-status").textContent =
+      `Round ${tournamentRoundNumber} · Match ${tournamentMatchIndex + 1} of ${tournamentRound.length / 2}`;
+    [first, second].forEach((place) => {
+      const card = document.createElement("article");
+      card.className = "rounded-2xl border border-white/10 bg-panel p-4";
+      appendPlaceDetails(card, place, true);
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "mt-3 w-full rounded-xl bg-lime px-3 py-3 font-extrabold text-ink";
+      button.textContent = "Pick this place";
+      button.addEventListener("click", () => {
+        tournamentWinners.push(place);
+        tournamentMatchIndex += 1;
+        renderTournamentMatch();
+      });
+      card.append(button);
+      target.append(card);
+    });
+  }
+
+  document.querySelector("#start-tournament").addEventListener("click", async (event) => {
+    const button = event.currentTarget;
+    button.disabled = true;
+    const status = document.querySelector("#tournament-status");
+    const target = document.querySelector("#tournament-match");
+    target.replaceChildren();
+    status.textContent = "Finding tournament places…";
+    try {
+      const data = await requestJson("/api/places", {
+        method: "POST",
+        body: JSON.stringify(searchPayload("food"))
+      });
+      const size = Number(document.querySelector("#tournament-size").value);
+      if (data.places.length < size) {
+        throw new Error(`Only ${data.places.length} matching places found. Choose ${Math.min(4, data.places.length)} or widen filters.`);
+      }
+      tournamentRound = data.places.slice(0, size);
+      for (let index = tournamentRound.length - 1; index > 0; index -= 1) {
+        const swap = Math.floor(Math.random() * (index + 1));
+        [tournamentRound[index], tournamentRound[swap]] = [tournamentRound[swap], tournamentRound[index]];
+      }
+      tournamentWinners = [];
+      tournamentMatchIndex = 0;
+      tournamentRoundNumber = 1;
+      renderTournamentMatch();
+    } catch (error) {
+      status.textContent = error.message;
+    } finally {
+      button.disabled = false;
+    }
+  });
+
+  let activeGroupId = null;
+  let activeGroupShareUrl = null;
+  let groupPollTimer = null;
+  const savedVoterId = sessionStorage.getItem("jom-decide-voter-id");
+  const voterId = telegram?.initDataUnsafe?.user?.id
+    ? `telegram-${telegram.initDataUnsafe.user.id}`
+    : savedVoterId || (() => {
+      const value = window.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`;
+      sessionStorage.setItem("jom-decide-voter-id", value);
+      return value;
+    })();
+
+  function renderGroup(session) {
+    const target = document.querySelector("#group-result");
+    target.replaceChildren();
+    session.places.forEach((place, index) => {
+      const card = document.createElement("article");
+      card.className = "rounded-2xl border border-white/10 bg-panel p-4";
+      appendPlaceDetails(card, place, true);
+      const count = session.votes[index] || 0;
+      const vote = document.createElement("button");
+      vote.className = "mt-3 w-full rounded-xl bg-lime px-3 py-3 font-extrabold text-ink";
+      vote.type = "button";
+      vote.textContent = `Vote · ${count} ${count === 1 ? "vote" : "votes"}`;
+      vote.addEventListener("click", async () => {
+        vote.disabled = true;
+        try {
+          const data = await requestJson(`/api/groups/${encodeURIComponent(activeGroupId)}/votes`, {
+            method: "POST",
+            body: JSON.stringify({ optionIndex: index, voterId })
+          });
+          renderGroup(data.session);
+          document.querySelector("#group-status").textContent = "Vote saved. You can change your vote.";
+        } catch (error) {
+          document.querySelector("#group-status").textContent = error.message;
+          vote.disabled = false;
+        }
+      });
+      card.append(vote);
+
+      const bar = document.createElement("div");
+      bar.className = "mt-3 h-2 overflow-hidden rounded-full bg-white/10";
+      const fill = document.createElement("div");
+      fill.className = "h-full rounded-full bg-lime";
+      fill.style.width = `${session.totalVotes ? Math.round(count / session.totalVotes * 100) : 0}%`;
+      bar.append(fill);
+      card.append(bar);
+      target.append(card);
+    });
+    const maxVotes = Math.max(...session.votes);
+    const leaders = session.places.filter((_place, index) => session.votes[index] === maxVotes);
+    const summary = document.createElement("p");
+    summary.className = "rounded-xl border border-lime/30 p-3 text-sm font-bold";
+    summary.textContent = session.totalVotes
+      ? `Current leader: ${leaders.map((place) => place.name).join(" / ")} · ${session.totalVotes} total votes`
+      : "No votes yet.";
+    target.prepend(summary);
+
+    if (activeGroupShareUrl) {
+      const share = document.createElement("button");
+      share.className = "w-full rounded-xl border border-lime/50 px-4 py-3 font-extrabold text-lime";
+      share.type = "button";
+      share.textContent = "Share vote link";
+      share.addEventListener("click", () => {
+        const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(activeGroupShareUrl)}&text=${encodeURIComponent("Vote where we makan!")}`;
+        if (telegram?.openTelegramLink) telegram.openTelegramLink(shareUrl);
+        else window.open(shareUrl, "_blank", "noopener,noreferrer");
+      });
+      target.append(share);
+    }
+  }
+
+  async function loadGroup(id, shareUrl = null) {
+    activeGroupId = id;
+    activeGroupShareUrl = shareUrl || `${window.location.origin}${window.location.pathname}?group=${encodeURIComponent(id)}`;
+    document.querySelector("#group-status").textContent = "Loading group vote…";
+    const data = await requestJson(`/api/groups/${encodeURIComponent(id)}`);
+    renderGroup(data.session);
+    document.querySelector("#group-status").textContent = "Vote once; change your vote any time.";
+    if (groupPollTimer) window.clearInterval(groupPollTimer);
+    groupPollTimer = window.setInterval(async () => {
+      if (document.hidden || activeGroupId !== id) return;
+      try {
+        const update = await requestJson(`/api/groups/${encodeURIComponent(id)}`);
+        renderGroup(update.session);
+      } catch (error) {
+        document.querySelector("#group-status").textContent = error.message;
+        window.clearInterval(groupPollTimer);
+      }
+    }, 5000);
+  }
+
+  document.querySelector("#create-group").addEventListener("click", async (event) => {
+    const button = event.currentTarget;
+    button.disabled = true;
+    document.querySelector("#group-status").textContent = "Finding four options…";
+    try {
+      const data = await requestJson("/api/groups", {
+        method: "POST",
+        body: JSON.stringify(searchPayload("food"))
+      });
+      activeGroupShareUrl = data.shareUrl;
+      await loadGroup(data.session.id, data.shareUrl);
+      const shareUrl = new URL(data.shareUrl);
+      history.replaceState(null, "", `${shareUrl.pathname}${shareUrl.search}`);
+    } catch (error) {
+      document.querySelector("#group-status").textContent = error.message;
+    } finally {
+      button.disabled = false;
+    }
+  });
+
+  const sharedGroupId = new URLSearchParams(window.location.search).get("group");
+  if (sharedGroupId) {
+    document.querySelector("#tab-group").click();
+    loadGroup(sharedGroupId).catch((error) => {
+      document.querySelector("#group-status").textContent = error.message;
+    });
+  }
+
+  document.querySelector("#generate-trip").addEventListener("click", async (event) => {
+    const button = event.currentTarget;
+    const location = document.querySelector("#trip-location").value.trim();
+    const status = document.querySelector("#trip-generator-status");
+    const result = document.querySelector("#generated-itinerary");
+    result.replaceChildren();
+    if (!location) {
+      status.textContent = "Enter a Malaysian city or area.";
+      return;
+    }
+    button.disabled = true;
+    status.textContent = "Building your day…";
+    try {
+      const data = await requestJson("/api/trip", {
+        method: "POST",
+        body: JSON.stringify({ location })
+      });
+      data.stages.forEach((stage) => {
+        const item = document.createElement("li");
+        item.className = "rounded-xl border border-white/10 bg-ink p-3";
+        const heading = document.createElement("p");
+        heading.className = "font-bold text-lime";
+        heading.textContent = `${stage.time} · ${stage.title}`;
+        item.append(heading);
+        appendPlaceDetails(item, stage.place, true);
+        result.append(item);
+      });
+      status.textContent = `Your day in ${data.location}.`;
+    } catch (error) {
+      status.textContent = error.message;
+    } finally {
+      button.disabled = false;
+    }
+  });
 
   const coin = document.querySelector("#coin");
   document.querySelector("#flip-coin").addEventListener("click", (event) => {
@@ -261,11 +563,6 @@
 
     drawWheel(choices, wheelRotation);
     requestAnimationFrame(animate);
-  });
-
-  document.querySelector("#pick-destination").addEventListener("click", () => {
-    const choices = validateChoices(document.querySelector("#destinations"), document.querySelector("#trip-status"));
-    document.querySelector("#destination-result").textContent = choices ? `Let’s go: ${randomItem(choices)}` : "";
   });
 
   document.querySelector("#build-itinerary").addEventListener("click", () => {

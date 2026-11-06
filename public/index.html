@@ -61,15 +61,17 @@
       </header>
 
       <nav class="mb-6 grid grid-cols-3 gap-2 rounded-2xl bg-panel p-1.5" aria-label="Decider tools" role="tablist">
-        <button class="tab-button rounded-xl px-2 py-3 text-sm font-bold transition" id="tab-food" role="tab" aria-selected="true" aria-controls="panel-food">🍔 Makan / Hangout</button>
-        <button class="tab-button rounded-xl px-2 py-3 text-sm font-bold text-muted transition" id="tab-decide" role="tab" aria-selected="false" aria-controls="panel-decide">🪙 Quick decide</button>
-        <button class="tab-button rounded-xl px-2 py-3 text-sm font-bold text-muted transition" id="tab-trip" role="tab" aria-selected="false" aria-controls="panel-trip">🗺️ Trip builder</button>
+        <button class="tab-button rounded-xl px-2 py-3 text-sm font-bold transition" id="tab-food" role="tab" aria-selected="true" aria-controls="panel-food">🍔 Makan</button>
+        <button class="tab-button rounded-xl px-2 py-3 text-sm font-bold text-muted transition" id="tab-tournament" role="tab" aria-selected="false" aria-controls="panel-tournament">⚔️ Tournament</button>
+        <button class="tab-button rounded-xl px-2 py-3 text-sm font-bold text-muted transition" id="tab-group" role="tab" aria-selected="false" aria-controls="panel-group">👥 Group vote</button>
+        <button class="tab-button rounded-xl px-2 py-3 text-sm font-bold text-muted transition" id="tab-trip" role="tab" aria-selected="false" aria-controls="panel-trip">🗺️ Trip</button>
+        <button class="tab-button rounded-xl px-2 py-3 text-sm font-bold text-muted transition" id="tab-decide" role="tab" aria-selected="false" aria-controls="panel-decide">🪙 Coin / Custom</button>
       </nav>
 
       <section id="panel-food" role="tabpanel" aria-labelledby="tab-food">
         <div class="mb-5">
           <h2 class="text-xl font-extrabold">Jom Makan / Hangout</h2>
-          <p class="mt-1 text-sm text-muted">One random pick from nearby OpenStreetMap places.</p>
+          <p class="mt-1 text-sm text-muted">Find Malaysian makan spots with budget, craving, and dietary filters.</p>
         </div>
         <form id="food-form" class="space-y-4">
           <label class="block text-sm font-semibold" for="location">Your area in Malaysia</label>
@@ -83,11 +85,64 @@
               <option value="hangout">Hangout — parks, arcades, malls</option>
             </select>
           </label>
-          <p class="text-xs leading-relaxed text-muted">Search radius: 3 km. Place data from OpenStreetMap contributors.</p>
+          <div class="grid grid-cols-2 gap-3">
+            <label class="block text-sm font-semibold">Budget
+              <select id="budget-filter" class="mt-2 w-full rounded-xl border border-white/10 bg-panel px-3 py-3 text-sm">
+                <option value="any">Any budget</option>
+                <option value="under15">🟢 Below RM15</option>
+                <option value="15to30">🟡 RM15–RM30</option>
+                <option value="50plus">🔴 RM50+</option>
+              </select>
+            </label>
+            <label class="block text-sm font-semibold">Craving
+              <select id="craving-filter" class="mt-2 w-full rounded-xl border border-white/10 bg-panel px-3 py-3 text-sm">
+                <option value="any">Anything</option>
+                <option value="nasi">Nasi / Heavy</option>
+                <option value="soupy">Soupy</option>
+                <option value="fast-fried">Fast &amp; Fried</option>
+                <option value="lepak">Lepak / Coffee</option>
+                <option value="late-night">Open past midnight</option>
+              </select>
+            </label>
+          </div>
+          <label class="block text-sm font-semibold">Dietary
+            <select id="dietary-filter" class="mt-2 w-full rounded-xl border border-white/10 bg-panel px-3 py-3">
+              <option value="none">No dietary filter</option>
+              <option value="halal">Halal only</option>
+              <option value="pork-free">Pork-free only</option>
+            </select>
+          </label>
+          <p class="text-xs leading-relaxed text-muted">Search radius: 4 km. Budget and dietary labels rely on available OpenStreetMap data and estimates.</p>
           <button class="w-full rounded-xl bg-lime px-4 py-4 font-extrabold text-ink transition active:scale-[.99]" type="submit">Decide For Me!</button>
         </form>
         <p id="food-status" class="mt-4 min-h-5 text-sm text-muted" role="status" aria-live="polite"></p>
         <article id="place-result" class="mt-3 hidden rounded-2xl border border-white/10 bg-panel p-5" aria-live="polite"></article>
+      </section>
+
+      <section id="panel-tournament" class="hidden" role="tabpanel" aria-labelledby="tab-tournament">
+        <div class="mb-5">
+          <h2 class="text-xl font-extrabold">Food tournament</h2>
+          <p class="mt-1 text-sm text-muted">Pick a winner from nearby 1v1 matchups.</p>
+        </div>
+        <label class="block text-sm font-semibold">Bracket size
+          <select id="tournament-size" class="mt-2 w-full rounded-xl border border-white/10 bg-panel px-3 py-3">
+            <option value="4">4 places</option>
+            <option value="8">8 places</option>
+          </select>
+        </label>
+        <button id="start-tournament" class="mt-4 w-full rounded-xl bg-lime px-4 py-4 font-extrabold text-ink">Start tournament</button>
+        <p id="tournament-status" class="mt-4 min-h-5 text-sm text-muted" role="status" aria-live="polite"></p>
+        <div id="tournament-match" class="mt-3 space-y-3"></div>
+      </section>
+
+      <section id="panel-group" class="hidden" role="tabpanel" aria-labelledby="tab-group">
+        <div class="mb-5">
+          <h2 class="text-xl font-extrabold">Apa-Apa Je</h2>
+          <p class="mt-1 text-sm text-muted">Share four options. Friends vote from Telegram; tally updates live.</p>
+        </div>
+        <button id="create-group" class="w-full rounded-xl bg-lime px-4 py-4 font-extrabold text-ink">Create group vote</button>
+        <div id="group-status" class="mt-4 min-h-5 text-sm text-muted" role="status" aria-live="polite"></div>
+        <div id="group-result" class="mt-3 space-y-3"></div>
       </section>
 
       <section id="panel-decide" class="hidden" role="tabpanel" aria-labelledby="tab-decide">
@@ -125,18 +180,18 @@
       <section id="panel-trip" class="hidden" role="tabpanel" aria-labelledby="tab-trip">
         <div class="mb-5">
           <h2 class="text-xl font-extrabold">Plan something</h2>
-          <p class="mt-1 text-sm text-muted">Pick a destination or shuffle a day out.</p>
+          <p class="mt-1 text-sm text-muted">Generate a one-day Malaysian trip timetable.</p>
         </div>
         <div class="rounded-2xl bg-panel p-5">
-          <h3 class="font-extrabold">Where should we go?</h3>
-          <p class="mt-1 text-sm text-muted">Enter 2 to 10 destinations, one per line.</p>
-          <textarea id="destinations" rows="4" maxlength="500" class="mt-4 w-full resize-y rounded-xl border border-white/10 bg-ink px-4 py-3 text-sm placeholder:text-muted/60" placeholder="Penang&#10;Ipoh&#10;Melaka"></textarea>
-          <button id="pick-destination" class="mt-3 w-full rounded-xl bg-lime px-4 py-3 font-extrabold text-ink">Pick destination</button>
-          <p id="destination-result" class="mt-3 min-h-6 text-center font-extrabold text-lime" aria-live="polite"></p>
+          <label class="block text-sm font-semibold" for="trip-location">Destination city or area</label>
+          <input id="trip-location" class="mt-2 w-full rounded-xl border border-white/10 bg-ink px-4 py-3 text-base" placeholder="Ipoh, Melaka, Georgetown" maxlength="120">
+          <button id="generate-trip" class="mt-3 w-full rounded-xl bg-lime px-4 py-3 font-extrabold text-ink">Build my day</button>
+          <p id="trip-generator-status" class="mt-3 min-h-5 text-center text-sm text-muted" role="status" aria-live="polite"></p>
+          <ol id="generated-itinerary" class="mt-4 space-y-3" aria-live="polite"></ol>
         </div>
         <div class="mt-4 rounded-2xl bg-panel p-5">
-          <h3 class="font-extrabold">Build a one-day plan</h3>
-          <p class="mt-1 text-sm text-muted">Add 2 to 10 activities. We’ll shuffle them into time slots.</p>
+          <h3 class="font-extrabold">Custom activity shuffle</h3>
+          <p class="mt-1 text-sm text-muted">Add 2 to 10 activities, one per line.</p>
           <textarea id="activities" rows="5" maxlength="500" class="mt-4 w-full resize-y rounded-xl border border-white/10 bg-ink px-4 py-3 text-sm placeholder:text-muted/60" placeholder="Breakfast&#10;Visit a museum&#10;Explore a night market"></textarea>
           <button id="build-itinerary" class="mt-3 w-full rounded-xl border border-lime/50 px-4 py-3 font-extrabold text-lime">Shuffle my day</button>
           <ol id="itinerary-result" class="mt-4 space-y-3" aria-live="polite"></ol>
